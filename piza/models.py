@@ -2,7 +2,7 @@ import datetime
 from distutils.command import upload
 from tabnanny import verbose
 from django.db import models
-from .db import post_pizaproduct_order, get_orders_list, post_add_orders, get_profil_list, post_order_detail, post_add_contract, post_pick_up, get_orders_list_courier, post_order_detail_courier, post_status_change
+from .db import post_pizaproduct_order, get_orders_list, post_add_orders, get_profil_list, post_order_detail, post_add_contract, post_pick_up, get_orders_list_courier, post_order_detail_courier, post_status_change, get_orders_report_courier, post_push_courier, get_orders_list_kitchens
 from authentification.auth_decorators import auth_required
 
 
@@ -243,6 +243,10 @@ class contact_info(models.Model):
 def orders_list(request, msisdn):
     return get_orders_list(msisdn)
 
+#@auth_required(token_only=False)
+def orders_list_kitchens(request):
+    return get_orders_list_kitchens(request)
+
 @auth_required(token_only=False)
 def add_orders_post(request, msisdn, delivery_status, delivery_time, delivery_address, delivery_comment, branch_id, product):
     return post_add_orders(msisdn, delivery_status, delivery_time, delivery_address, delivery_comment, branch_id, product)
@@ -274,3 +278,11 @@ def orders_list_courier(request, msisdn):
 @auth_required(token_only=False)
 def add_status_change(request, msisdn, order_id, status_id):
     return post_status_change(msisdn, order_id, status_id)
+
+@auth_required(token_only=False)
+def orders_report_courier(request, msisdn):
+    return get_orders_report_courier(msisdn)
+
+@auth_required(token_only=False)
+def push_courier(request, msisdn, order_id):
+    return post_push_courier(msisdn, order_id)

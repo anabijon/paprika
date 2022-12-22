@@ -1,11 +1,12 @@
 from django.shortcuts import render
 from rest_framework import generics, status
 from piza.serializers import ProductDetailSerializer, ProductListSerializer, ProductCategorySerializer, CategoryListSerializer, OrderDetailSerializer, OrderItemDetailSerializer, ProductItemSerializer, AddContactSerializer, PizaOrder, DeliverySerializer, SlideListSerializer, TextMenuListSerializer
-from piza.models import Products, category, ProductItem, pizaproduct_order, orders, add_orders_post, profil_list, orders_list, order_detail, slide, menu_text, add_contract_post, add_pick_up, orders_list_courier, order_detail_courier, add_status_change
+from piza.models import Products, category, ProductItem, pizaproduct_order, orders, add_orders_post, profil_list, orders_list, order_detail, slide, menu_text, add_contract_post, add_pick_up, orders_list_courier, order_detail_courier, add_status_change, orders_report_courier, push_courier, orders_list_kitchens
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from piza.utils import filterResponse
 import piza.serializers as serializer
+from http.server import HTTPServer, SimpleHTTPRequestHandler, test
 import json
 from authentification.auth_decorators import auth_required
 
@@ -287,3 +288,67 @@ class Profil(APIView):
                 )
         else:
             return filterResponse(resp)
+
+class OrdersReportCourier(APIView):
+    def get(self, request):
+        resp=orders_report_courier(request)
+        if 'err_code' in resp.keys():
+            if resp['err_code'] not in (0, -1):
+                content = {
+                    'result': -1,
+                    'err_msg': 'Err resp test',
+                }
+                return Response({"message":"You didn't have orders"}, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                return filterResponse(
+                    resp
+                )
+        else:
+            return filterResponse(resp)
+
+class OrdersPushCourier(APIView):        
+    def post(self, request):
+        validation = serializer.PickUpSerializer(data=request.data)
+        if validation.is_valid(raise_exception=True):
+            r=push_courier(
+                    request, 
+                    order_id = validation.data['order_id']
+                )
+            if 'err_code' in r.keys():
+                if r['err_code']!=0:
+                    content = {
+                        'err_code': r['err_code'],
+                        'err_msg': r['err_msg'],
+                        }
+                    return Response(content, status=status.HTTP_400_BAD_REQUEST)
+                else:
+                    return filterResponse(
+                        r
+                    )
+            elif  r['un_authorized']==True:
+                content = {
+                        'err_code': -400,
+                        'err_msg': "You are not authorized",
+                        }
+                return Response(content, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                return Response('Bad request', status=status.HTTP_400_BAD_REQUEST)
+
+
+class OrdersListKitchens(APIView):
+    def get(self, request):
+        resp=orders_list_kitchens(request)
+        if 'err_code' in resp.keys():
+            if resp['err_code'] not in (0, -1):
+                content = {
+                    'result': -1,
+                    'err_msg': 'Err resp test',
+                }
+                return Response({"message":"You didn't have orders"}, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                return filterResponse(
+                    resp
+                )
+        else:
+            return filterResponse(resp)
+    

@@ -270,6 +270,7 @@ def post_add_contract(msisdn, name, adress):
             o_err_msg = ""
             args = (
                 msisdn, name, adress, o_result, o_err_msg)
+            print(args)
             cursor.callproc('add_contact', args)
             cursor.execute(
                 "select @_add_contact_3,@_add_contact_4;")
@@ -319,6 +320,7 @@ def post_status_change(msisdn, order_id, status_id):
             cursor.execute(
                 "select @_change_status_3,@_change_status_4;")
             result = cursor.fetchall()
+
             resp = {"err_code": result[0][0],
                 "err_msg": result[0][1]}
             return resp
@@ -400,6 +402,134 @@ and di.status=1
     else:
         content = {
                 "order_list": sorted(merged3, key=operator.itemgetter("order_id"), reverse=True),
+                "err_msg": "Order list",
+                "err_code": 0}
+        return content
+
+def get_orders_report_courier(msisdn):
+   with connections['default'].cursor() as cursor:
+    cursor.execute("""select sum(po.paid) sum_order, count(pd.order_id) count_order from piza_orders po, piza_deliveryinfo pd 
+where po.order_id=pd.order_id 
+and pd.courier=""" + str(msisdn) +"""
+and pd.status=3;""")
+    colomns_report_courier = [i[0] for i in cursor.description]
+    report_courier = [dict(zip(colomns_report_courier, row)) for row in cursor]
+
+    content = {
+            "sum_order": report_courier[0]['sum_order'],
+            "count_order": report_courier[0]['count_order']}
+    return content
+
+def post_push_courier(msisdn, order_id):
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute(""" Select ac1.device_token from auth_code ac1, piza_deliveryinfo pd
+ where ac1.stat_id=3 and ac1.device_token !=""
+ and ac1.msisdn=pd.phone
+ and pd.order_id=""" + str(order_id) +"""
+and ac1.cre_dt = (Select max(ac2.cre_dt) from auth_code ac2 where ac2.stat_id=3 and ac2.msisdn=ac1.msisdn);""")
+            colomns_orders_id = [i[0] for i in cursor.description]
+            token_device = [dict(zip(colomns_orders_id, row)) for row in cursor]
+            if token_device[0]['device_token'] !="not token":
+                url = "https://fcm.googleapis.com/fcm/send"
+
+                payload = json.dumps({
+                "registration_ids": [
+                    token_device[0]['device_token']
+                ],
+                "notification": {
+                    "body": "Курьер на месте. Прошу принять заказ.",
+                    "title": "Доставка!"
+                }
+                })
+                headers = {
+                'Authorization': 'key=AAAAv4PolTM:APA91bHn-kOynZHp461mj8j-SwYoMpyp3_BRGZRq_BXI4bNGzyEuunC4gkesH6X-jEplB8v45PiG3lA00O_tdxcGkaHVDcV5HyyU9ZXZxH2wH2JaLFxtP342AhT_88D4MpxqgWSytTGj',
+                'Content-Type': 'application/json'
+                }
+                response = requests.request("POST", url, headers=headers, data=payload)
+                resp = {"err_code": 0,
+                        "err_msg": "Client Alert"}
+            return resp
+    except:
+        return {
+            "status": "error", 
+            "message":"db.add_orders.post_addorders -> " + str(sys.exc_info()[1])
+            }
+
+def get_orders_list_kitchens(request):
+   with connections['default'].cursor() as cursor:
+    cursor.execute("""select po.order_id, sum(po.paid) sum_order
+from piza_orders po, piza_productitem pi, piza_products pp
+where po.product_value=pi.id
+and po.order_id>=225
+and po.product_id=pp.id
+group by order_id
+order by  order_id;""")
+    colomns = [i[0] for i in cursor.description]
+    order_list = [dict(zip(colomns, row)) for row in cursor]
+    order_list = sorted(order_list,
+                    key = itemgetter('order_id'))                        
+
+    cursor.execute("""select di.phone, di.delivery_time, di.cre_date, di.adress, os.status_name, di.comment, di.order_id, pb.name branch_name
+from piza_deliveryinfo di,  piza_order_status os, piza_branch pb
+where di.order_id is not null and di.status=os.id and di.branch_id=pb.id order by cre_date desc;""")
+    colomns_delivery = [i[0] for i in cursor.description]
+    delivery = [dict(zip(colomns_delivery, row)) for row in cursor]
+
+    merged2=[]
+    for ol in order_list:
+        merged2.append({
+            'order_id' :ol['order_id'],
+            'sum_order' :ol['sum_order'],
+        })
+
+    merged=[]
+    for dl in delivery:
+        merged.append({
+            'order_id' :dl['order_id'],
+            'branch_name' :dl['branch_name'],
+            'cre_date' :dl['cre_date'],
+            'adress' :dl['adress'],
+            'comment' :dl['comment'],
+            'delivery_time' :dl['delivery_time'],
+            'phone' :dl['phone'],
+            'status_name' :dl['status_name'],
+        }) 
+    
+    merged3=[]
+    for o in merged2:
+        for d in merged:
+            if(o['order_id']==d['order_id']):
+
+                cursor.execute("""select po.paid, po.count, pi.volume_name, pp.id as product_id, pp.name 
+                from piza_orders po, piza_productitem pi, piza_products pp, piza_deliveryinfo pd
+where po.product_value=pi.id
+and po.order_id=pd.order_id
+and po.order_id = """ + str(d['order_id']) +"""
+and po.product_id=pp.id
+order by date;""")
+                colomns_orders_id = [i[0] for i in cursor.description]
+                order_detail = [dict(zip(colomns_orders_id, row)) for row in cursor]
+                
+                merged3.append({
+                    'order_id' :d['order_id'],
+                    'adress' :d['adress'],
+                    'comment' :d['comment'],
+                    'branch_name' :d['branch_name'],
+                    'delivery_time' :d['delivery_time'],
+                    'cre_date' :d['cre_date'],
+                    'sum_order' :o['sum_order'],
+                    'status_name' :d['status_name'],
+                    'product' :order_detail,
+                })
+    if delivery ==[]: 
+        content = {
+               "err_msg": "You didn't have orders",
+               "err_code": -1}
+        return content
+    else:
+        content = {
+                "order_history": sorted(merged3, key=operator.itemgetter("order_id"), reverse=True),
                 "err_msg": "Order list",
                 "err_code": 0}
         return content

@@ -24,9 +24,8 @@ SECRET_KEY = 'django-insecure-%rrm$z6itw*rbqk$c-7y_*e+=w+0o5^9#ylnxktlkup+r()iro
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['217.8.35.24', 'localhost', '0.0.0.0:8000', '127.0.0.1', '192.168.1.100', '192.168.90.251', '10.249.129.36']
-# ALLOWED_HOSTS = ['0.0.0.0']
-
+#ALLOWED_HOSTS = ['217.8.35.24', 'localhost', '0.0.0.0:8000', '127.0.0.1', '192.168.1.100', '192.168.90.251', '10.249.129.36']
+ALLOWED_HOSTS = ['*']
 
 # Application definition
 
@@ -37,6 +36,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',
     'rest_framework',
     'piza',
     'authentification',
@@ -45,6 +45,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -69,6 +70,8 @@ TEMPLATES = [
         },
     },
 ]
+
+CORS_ALLOW_ALL_ORIGINS = True
 
 WSGI_APPLICATION = 'apimobile.wsgi.application'
 

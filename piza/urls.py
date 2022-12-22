@@ -22,4 +22,7 @@ urlpatterns = [
     path('orders-list-courier/', OrdersListCourier.as_view()),
     path('order-detail-courier/', OrderDetailCourier.as_view()),
     path('status-change/', StatusChange.as_view()),
+    path('orders-report-courier/', OrdersReportCourier.as_view()),
+    path('orders-push-courier/', OrdersPushCourier.as_view()),
+    path('orders-list-kitchens/', OrdersListKitchens.as_view()),
 ]
