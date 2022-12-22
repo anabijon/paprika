@@ -1,7 +1,7 @@
 #from apimobile.piza.models import orders
 from itertools import count
 from rest_framework import serializers
-from piza.models import Products, category, orders, OrderItem, ProductItem, contact_info
+from piza.models import Products, category, orders, OrderItem, ProductItem, contact_info, slide, menu_text, courier
 
 class ProductItemSerializer(serializers.ModelSerializer):
     class Meta:
@@ -25,7 +25,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Products
         depth =2
-        fields = ('id', 'name', 'ProductItem', 'Ingredients', 'category', 'position', 'image', 'status')
+        fields = ('id', 'name', 'ProductItem', 'Ingredients', 'category', 'position', 'time_preparing', 'image', 'status')
 
 class ProductCategorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -43,6 +43,16 @@ class CategoryListSerializer(serializers.ModelSerializer):
         model = category
         fields = ('id', 'cat_name', 'comment', 'position', 'image', 'status')
 
+class SlideListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = slide
+        fields = ('id', 'image', 'url', 'status', 'priority')
+
+class TextMenuListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = menu_text
+        fields = ('id', 'text')
+
 class OrderDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = orders
@@ -56,7 +66,14 @@ class OrderItemDetailSerializer(serializers.ModelSerializer):
 class AddContactSerializer(serializers.ModelSerializer):
     class Meta:
         model = contact_info
-        fields = '__all__'
+        fields = ('name', 'adress')
+
+class PickUpSerializer(serializers.Serializer):
+    order_id = serializers.IntegerField()
+
+class StatusChangeSerializer(serializers.Serializer):
+    order_id = serializers.IntegerField()
+    status_id = serializers.IntegerField()
 
 class PizaOrder(serializers.Serializer):
     phone = serializers.CharField(required=True)
@@ -67,8 +84,12 @@ class PizaOrder(serializers.Serializer):
     comment = serializers.CharField(required=True)
 
 class addorders(serializers.Serializer):
-    delivery_time = serializers.DateTimeField()
-    delivery_address = serializers.CharField(required=True)
-    delivery_comment = serializers.CharField(required=True)
+    delivery_time = serializers.CharField(default='')
+    delivery_address = serializers.CharField(default='')
+    delivery_comment = serializers.CharField(default='')
     delivery_status = serializers.IntegerField()
     product = serializers.JSONField()
+    branch_id = serializers.IntegerField()
+
+class orderdetail(serializers.Serializer):
+    order_id = serializers.IntegerField()

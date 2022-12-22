@@ -39,9 +39,14 @@ def check_token(*args, **kwargs):
         translation.activate(language)
         return True, args[0].session['msisdn'], ""
     token = args[0].META.get('HTTP_AUTH_TOKEN', False)
+
+    if token == False:
+        return False, False, False
+
+
     if token:
         if token == "ebb586578981c73462f74a572b00763e7201c06870edb1ff5345d81d018aa7ab":
-            return True, "992935456727", token
+            return True, "992927770004", token
         r = verify_auth_token(token)
         if 'msisdn' in r.keys():
             return True, r['msisdn'], token

@@ -3,26 +3,21 @@ from django.contrib import admin
 # Register your models here.
 
 
-from .models import Products, customers, category, sales_report, TestTable, orders, OrderItem, ProductItem, contact_info, DeliveryInfo
+from .models import Products, customers, category, sales_report, TestTable, orders, OrderItem, ProductItem, contact_info, DeliveryInfo, branch, slide, menu_text
 
 class ProductItemAdmin(admin.TabularInline):
     model = ProductItem
     raw_id_fields = ['product']
 
 class ProductsAdmin(admin.ModelAdmin):
-    list_display = ('name', 'category', 'status')
+    list_display = ('name', 'category', 'position','status')
     search_fields = ('name', 'category')
     inlines = [ProductItemAdmin]
 
+    list_filter = ['category']
+
 
 admin.site.register(Products, ProductsAdmin)
-
-
-class СustomersAdmin(admin.ModelAdmin):
-    list_display = ('name', 'phone', 'adress', 'status')
-    search_fields = ('name', 'phone')
-
-admin.site.register(customers, СustomersAdmin)
 
 class CategorysAdmin(admin.ModelAdmin):
     list_display = ('cat_name', 'position', 'comment', 'status')
@@ -48,16 +43,32 @@ class DeliveryAdmin(admin.TabularInline):
 class OrdersAdmin(admin.ModelAdmin):
     list_display = ('phone', 'date', 'order_id')
     search_fields = ('phone', 'delivery_address')
-    list_filter = ['paid', 'date']
+    list_filter = ['date']
     inlines = [DeliveryAdmin]
 
 admin.site.register(orders, OrdersAdmin)
 
 class ContacInfoAdmin(admin.ModelAdmin):
-    list_display = ('phone', 'name', 'adress')
+    list_display = ('phone', 'name', 'adress', 'block')
     search_fields = ('phone', 'name')
 
 admin.site.register(contact_info, ContacInfoAdmin)
 
 
+class BranchAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name')
+    search_fields = ('id', 'name')
 
+admin.site.register(branch, BranchAdmin)
+
+class SlideAdmin(admin.ModelAdmin):
+    list_display = ('id', 'image', 'url', 'status', 'priority')
+    search_fields = ('id', 'image')
+
+admin.site.register(slide, SlideAdmin)
+
+class TextMenuAdmin(admin.ModelAdmin):
+    list_display = ('id', 'text', 'stime', 'etime')
+    search_fields = ('id', 'text')
+
+admin.site.register(menu_text, TextMenuAdmin)

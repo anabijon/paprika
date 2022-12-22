@@ -2,7 +2,7 @@ import datetime
 from distutils.command import upload
 from tabnanny import verbose
 from django.db import models
-from .db import post_pizaproduct_order, get_orders_list, post_add_orders, get_profil_list
+from .db import post_pizaproduct_order, get_orders_list, post_add_orders, get_profil_list, post_order_detail, post_add_contract, post_pick_up, get_orders_list_courier, post_order_detail_courier, post_status_change
 from authentification.auth_decorators import auth_required
 
 
@@ -33,12 +33,15 @@ class Products(models.Model):
         (2, 'Бургер'),
         (3, 'Стрипсы'),
         (4, 'Напитки'),
-        (5, 'Прочи'),
+        (5, 'Соус'),
+        (6, 'Картофель'),
+        (7, 'Десерты'),
     )
     category = models.IntegerField(verbose_name='Категория', choices=CATEGORY_NMAE)
     #category = models.ForeignKey(category, on_delete=models.PROTECT, null=True, verbose_name='Продукт',)
     image = models.ImageField(upload_to = "photos/%Y/%m/%d", verbose_name='Фото')
     Ingredients = models.CharField(verbose_name='Ингридиенд', max_length=300)
+    time_preparing = models.IntegerField(verbose_name='Время приготовления', default=0, blank=True, null=True)
     STATUS = (
         (1, 'Активна'),
         (2, 'Отключена'),
@@ -51,6 +54,7 @@ class Products(models.Model):
     class Meta:
         verbose_name = 'Продукты'
         verbose_name_plural = 'Продукты'
+        ordering = ['position']
 
 class ProductItem(models.Model):
     product = models.ForeignKey(to=Products, to_field='name', related_name='ProductItem', on_delete=models.PROTECT)
@@ -107,6 +111,42 @@ class TestTable(models.Model):
         managed = False
         db_table = 'test_table'
 
+class branch(models.Model):
+    name = models.CharField(max_length=20, blank=True, null=True)
+
+    class Meta:
+        verbose_name = 'Филиал'
+        verbose_name_plural = 'Филиал'
+
+class slide(models.Model):
+    image = models.ImageField(upload_to = "slide/%Y/%m/%d", verbose_name='Картинка')
+    url = models.CharField(verbose_name='Ссылка', max_length=100, blank=True, null=True)
+    priority = models.IntegerField(verbose_name='Приоритет', default=0)
+    STATUS = (
+        (1, 'Отркыто'),
+        (2, 'Закрыто'),
+    )
+    status = models.IntegerField(verbose_name='Статус', choices=STATUS)
+
+    class Meta:
+        verbose_name = 'Слайд'
+        verbose_name_plural = 'Слайд'
+
+    def __str__(self):
+        return 'Slide {}'.format(self.priority)
+
+class menu_text(models.Model):
+    text = models.CharField(verbose_name='Текст', max_length=100, blank=True, null=True)
+    stime = models.DateTimeField(verbose_name='Дата конец', max_length=15)
+    etime = models.DateTimeField(verbose_name='Дата конец', max_length=15)
+
+    class Meta:
+        verbose_name = 'Текст Меню'
+        verbose_name_plural = 'Текст Меню'
+
+    def __str__(self):
+        return 'Text {}'.format(self.id)
+
 class orders(models.Model):
     phone = models.CharField(verbose_name='Номер телефон', max_length=12)
     product = models.ForeignKey(Products, on_delete=models.PROTECT, null=True, verbose_name='Продукт')
@@ -120,7 +160,7 @@ class orders(models.Model):
     class Meta:
         verbose_name = 'Заказы'
         verbose_name_plural = 'Заказы'
-        ordering = ['order_id']
+        ordering = ['-order_id']
 
     def __str__(self):
         return 'Order {}'.format(self.id)
@@ -148,12 +188,12 @@ class order_status(models.Model):
     status_name = models.CharField(verbose_name='Статус', max_length=50)
 
 class DeliveryInfo(models.Model):
-    delivery_time = models.DateTimeField(verbose_name='Время доставки')
+    delivery_time = models.CharField(verbose_name='Срок доставки', max_length=50, null=True)
     adress = models.CharField(verbose_name='Адрес доставки', max_length=100, null=True)
     comment = models.CharField(verbose_name='Коментарии', max_length=100, null=True)
     cre_date = models.DateTimeField(auto_now_add=True, verbose_name='Время создание заказа', max_length=15)
     phone = models.CharField(verbose_name='Телефон', max_length=12, null=True)
-    #phone = models.ForeignKey(Products, related_name='InfoDelivery', on_delete=models.PROTECT)
+    courier = models.CharField(verbose_name='Курьер', max_length=12, null=True)
     STATUS = (
         (0, 'Карзина'),
         (1, 'Самовоз'),
@@ -162,14 +202,34 @@ class DeliveryInfo(models.Model):
         (4, 'Отказ'),
     )
     status = models.IntegerField(verbose_name='Статус', choices=STATUS)
+    delivery_etime = models.DateTimeField(verbose_name='Время доставки', max_length=15)
     #order_id = models.IntegerField(verbose_name='ID заказ')
     order = models.ForeignKey(orders, related_name='InfoDelivery', on_delete=models.PROTECT)
-    
+
+class courier(models.Model):
+    courier_phone = models.CharField(verbose_name='Телефон курьера', max_length=12, null=True)
+    order_id = models.IntegerField(verbose_name='Номер заказа', null=True)
+    comment = models.CharField(verbose_name='Коментарии', max_length=100, null=True)
+    cre_date = models.DateTimeField(auto_now_add=True, verbose_name='Время создание заказа', max_length=15)
+    STATUS = (
+        (0, 'Карзина'),
+        (1, 'Самовоз'),
+        (2, 'В процессе'),
+        (3, 'На доставке'),
+        (4, 'Доставлено'),
+        (5, 'Отказ'),
+    )
+    status = models.IntegerField(verbose_name='Статус', choices=STATUS)
 
 class contact_info(models.Model):
     phone = models.CharField(verbose_name='Номер телефон', max_length=12)
     name = models.CharField(verbose_name='ФИО', max_length=50)
     adress = models.CharField(verbose_name='Адрес', max_length=100)
+    STATUS = (
+        (0, 'Открыто'),
+        (1, 'Блокирован'),
+        (99, 'Курьер'))
+    block = models.IntegerField(verbose_name='Статус', default=0, choices=STATUS)
 
     def __str__(self):
         return self.phone
@@ -184,9 +244,33 @@ def orders_list(request, msisdn):
     return get_orders_list(msisdn)
 
 @auth_required(token_only=False)
-def add_orders_post(request, msisdn, delivery_status, delivery_time, delivery_address, delivery_comment, product):
-    return post_add_orders(msisdn, delivery_status, delivery_time, delivery_address, delivery_comment, product)
+def add_orders_post(request, msisdn, delivery_status, delivery_time, delivery_address, delivery_comment, branch_id, product):
+    return post_add_orders(msisdn, delivery_status, delivery_time, delivery_address, delivery_comment, branch_id, product)
 
 @auth_required(token_only=False)
 def profil_list(request, msisdn):
     return get_profil_list(msisdn)
+
+@auth_required(token_only=False)
+def order_detail(request, msisdn, order_id):
+    return post_order_detail(msisdn, order_id)
+
+@auth_required(token_only=False)
+def order_detail_courier(request, msisdn, order_id):
+    return post_order_detail_courier(msisdn, order_id)
+
+@auth_required(token_only=False)
+def add_contract_post(request, msisdn, name, adress):
+    return post_add_contract(msisdn, name, adress)
+
+@auth_required(token_only=False)
+def add_pick_up(request, msisdn, order_id):
+    return post_pick_up(msisdn, order_id)
+
+@auth_required(token_only=False)
+def orders_list_courier(request, msisdn):
+    return get_orders_list_courier(msisdn)
+
+@auth_required(token_only=False)
+def add_status_change(request, msisdn, order_id, status_id):
+    return post_status_change(msisdn, order_id, status_id)

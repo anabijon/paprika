@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from rest_framework import generics, status
-from piza.serializers import ProductDetailSerializer, ProductListSerializer, ProductCategorySerializer, CategoryListSerializer, OrderDetailSerializer, OrderItemDetailSerializer, ProductItemSerializer, AddContactSerializer, PizaOrder, DeliverySerializer
-from piza.models import Products, category, ProductItem, pizaproduct_order, orders, add_orders_post, profil_list
+from piza.serializers import ProductDetailSerializer, ProductListSerializer, ProductCategorySerializer, CategoryListSerializer, OrderDetailSerializer, OrderItemDetailSerializer, ProductItemSerializer, AddContactSerializer, PizaOrder, DeliverySerializer, SlideListSerializer, TextMenuListSerializer
+from piza.models import Products, category, ProductItem, pizaproduct_order, orders, add_orders_post, profil_list, orders_list, order_detail, slide, menu_text, add_contract_post, add_pick_up, orders_list_courier, order_detail_courier, add_status_change
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from piza.utils import filterResponse
@@ -20,6 +20,14 @@ class PizaListView(generics.ListAPIView):
 class CategoryListView(generics.ListAPIView):
     serializer_class = CategoryListSerializer
     queryset = category.objects.all()
+
+class SlideListView(generics.ListAPIView):
+    serializer_class = SlideListSerializer
+    queryset = slide.objects.all()
+
+class MenuTextListView(generics.ListAPIView):
+    serializer_class = TextMenuListSerializer
+    queryset = menu_text.objects.all()
 
 class PizaDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ProductDetailSerializer
@@ -62,14 +70,99 @@ class PizaOrders(APIView):
 class AddContactView(generics.CreateAPIView):
     serializer_class = AddContactSerializer
 
+class AddContactView(APIView):        
+    def post(self, request):
+        print('request ', request.data)
+        validation = serializer.AddContactSerializer(data=request.data)
+        if validation.is_valid(raise_exception=True):
+            r=add_contract_post(
+                    request, 
+                    name = validation.data['name'],
+                    adress = validation.data['adress']
+                )
+            print('r', r)
+            if 'err_code' in r.keys():
+                if r['err_code']!=0:
+                    content = {
+                        'err_code': r['err_code'],
+                        'err_msg': 'err_msg',
+                        }
+                    return Response(content, status=status.HTTP_400_BAD_REQUEST)
+                else:
+                    return filterResponse(
+                        r
+                    )
+            elif  r['un_authorized']==True:
+                content = {
+                        'err_code': -400,
+                        'err_msg': "You are not authorized",
+                        }
+                return Response(content, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                return Response('Bad request', status=status.HTTP_400_BAD_REQUEST)
+
+class PickUp(APIView):        
+    def post(self, request):
+        validation = serializer.PickUpSerializer(data=request.data)
+        if validation.is_valid(raise_exception=True):
+            r=add_pick_up(
+                    request, 
+                    order_id = validation.data['order_id']
+                )
+            if 'err_code' in r.keys():
+                if r['err_code']!=0:
+                    content = {
+                        'err_code': r['err_code'],
+                        'err_msg': r['err_msg'],
+                        }
+                    return Response(content, status=status.HTTP_400_BAD_REQUEST)
+                else:
+                    return filterResponse(
+                        r
+                    )
+            elif  r['un_authorized']==True:
+                content = {
+                        'err_code': -400,
+                        'err_msg': "You are not authorized",
+                        }
+                return Response(content, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                return Response('Bad request', status=status.HTTP_400_BAD_REQUEST)
+
+class StatusChange(APIView):        
+    def post(self, request):
+        validation = serializer.StatusChangeSerializer(data=request.data)
+        if validation.is_valid(raise_exception=True):
+            r=add_status_change(
+                    request, 
+                    order_id = validation.data['order_id'],
+                    status_id = validation.data['status_id']
+                )
+            if 'err_code' in r.keys():
+                if r['err_code']!=0:
+                    content = {
+                        'err_code': r['err_code'],
+                        'err_msg': r['err_msg'],
+                        }
+                    return Response(content, status=status.HTTP_400_BAD_REQUEST)
+                else:
+                    return filterResponse(
+                        r
+                    )
+            elif  r['un_authorized']==True:
+                content = {
+                        'err_code': -400,
+                        'err_msg': "You are not authorized",
+                        }
+                return Response(content, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                return Response('Bad request', status=status.HTTP_400_BAD_REQUEST)
+
 class OrdersList(APIView):
-    # def get(self, request):
-    #     resp=orders_list(request)
-    #     return Response(resp)
     def get(self, request):
         resp=orders_list(request)
         if 'err_code' in resp.keys():
-            if resp['err_code'] !=0:
+            if resp['err_code'] not in (0, -1):
                 content = {
                     'result': -1,
                     'err_msg': 'Err resp test',
@@ -82,16 +175,79 @@ class OrdersList(APIView):
         else:
             return filterResponse(resp)
 
+class OrdersListCourier(APIView):
+    def get(self, request):
+        resp=orders_list_courier(request)
+        if 'err_code' in resp.keys():
+            if resp['err_code'] not in (0, -1):
+                content = {
+                    'result': -1,
+                    'err_msg': 'Err resp test',
+                }
+                return Response({"message":"You didn't have orders"}, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                return filterResponse(
+                    resp
+                )
+        else:
+            return filterResponse(resp)
+
+class OrderDetail(APIView):
+    def post(self, request):
+            validation = serializer.orderdetail(data=request.data)
+            if validation.is_valid(raise_exception=True):
+                r = order_detail(
+                        request, 
+                        order_id=validation.data['order_id']
+                        )
+                if 'err_code' in r.keys():
+                    if r['err_code']!=0:
+                        content = {
+                            'err_code': r['err_code'],
+                            'err_msg': r['err_msg'],
+                            }
+                        return Response(content, status=status.HTTP_400_BAD_REQUEST)
+                    else:
+                        return filterResponse(
+                            r
+                        )
+                else:                
+                    return Response('Bad request', status=status.HTTP_400_BAD_REQUEST)
+
+class OrderDetailCourier(APIView):
+    def post(self, request):
+            validation = serializer.orderdetail(data=request.data)
+            if validation.is_valid(raise_exception=True):
+                r = order_detail_courier(
+                        request, 
+                        order_id=validation.data['order_id']
+                        )
+                if 'err_code' in r.keys():
+                    if r['err_code']!=0:
+                        content = {
+                            'err_code': r['err_code'],
+                            'err_msg': r['err_msg'],
+                            }
+                        return Response(content, status=status.HTTP_400_BAD_REQUEST)
+                    else:
+                        return filterResponse(
+                            r
+                        )
+                else:                
+                    return Response('Bad request', status=status.HTTP_400_BAD_REQUEST)
+
 class AddOrders(APIView):        
     def post(self, request):
+        print('request ', request.data)
         validation = serializer.addorders(data=request.data)
         if validation.is_valid(raise_exception=True):
             r=add_orders_post(
                     request, 
                     delivery_status = validation.data['delivery_status'],
                     delivery_time = validation.data['delivery_time'],
-                    delivery_address = validation.data['delivery_time'],
+                    delivery_address = validation.data['delivery_address'],
                     delivery_comment = validation.data['delivery_comment'],
+                    branch_id = validation.data['branch_id'],
                     product = validation.data['product']
                 )
             if 'err_code' in r.keys():

@@ -7,6 +7,7 @@ from itertools import groupby
 from operator import itemgetter
 import requests
 import json
+import operator
 
 def post_pizaproduct_order(request, category):
     try:
@@ -66,70 +67,74 @@ def post_pizaproduct_order(request, category):
 def get_orders_list(msisdn):
    with connections['default'].cursor() as cursor:
     i_msisdn = msisdn
-    cursor.execute("""select po.order_id, po.date, po.phone, pp.name, po.product_value, os.status_name, po.paid, count(*) count_product
-from piza_orders po, piza_products pp, piza_order_status os, piza_deliveryinfo di
-where po.product_id=pp.id
-and po.status=os.id
-and po.phone=di.phone
-and po.date=di.cre_date
-and po.phone=""" + str(msisdn) +"""
-group by po.phone, pp.name, po.product_value, os.status_name, di.delivery_time
-order by date;""")
+    cursor.execute("""select po.order_id, sum(po.paid) sum_order
+from piza_orders po, piza_productitem pi, piza_products pp
+where po.phone=""" + str(msisdn) +"""
+and po.product_value=pi.id
+and po.product_id=pp.id
+group by order_id
+order by  order_id;""")
     colomns = [i[0] for i in cursor.description]
     order_list = [dict(zip(colomns, row)) for row in cursor]
     order_list = sorted(order_list,
-                    key = itemgetter('order_id'))
+                    key = itemgetter('order_id'))                        
 
-    cursor.execute("""select di.order_id, di.phone, di.cre_date, di.delivery_time, di.adress, di.comment from piza_deliveryinfo di where di.phone=""" + str(msisdn) +""" and di.status=1;""")
+    cursor.execute("""select di.phone, di.delivery_time, di.cre_date, di.adress, os.status_name, di.comment, di.order_id, pb.name branch_name
+from piza_deliveryinfo di,  piza_order_status os, piza_branch pb
+where di.phone=""" + str(msisdn) +""" and di.order_id is not null and di.status=os.id and di.branch_id=pb.id order by cre_date desc;""")
     colomns_delivery = [i[0] for i in cursor.description]
     delivery = [dict(zip(colomns_delivery, row)) for row in cursor]
 
-    cursor.execute("""select di.order_id, di.phone, di.cre_date, di.delivery_time, di.adress, di.comment from piza_deliveryinfo di where di.phone=""" + str(msisdn) +""" and di.status=1;""")
-    colomns_delivery = [i[0] for i in cursor.description]
-    delivery = [dict(zip(colomns_delivery, row)) for row in cursor]
-    merged=[]
+    merged2=[]
     for ol in order_list:
-        for dl in delivery:
-            if (ol['order_id']==dl['order_id'] and ol['phone']==dl['phone']):
-                merged.append({
-                 'order_id' :ol['order_id'],
-                 'cre_date' :dl['cre_date'],
-                 'count_product' :ol['count_product'],
-                 'paid' :ol['paid'],
-                 'product_name' :ol['name'],
-                 'product_value' :ol['product_value'],
-                 'status_name' :ol['status_name'],
+        merged2.append({
+            'order_id' :ol['order_id'],
+            'sum_order' :ol['sum_order'],
+        })
+
+    merged=[]
+    for dl in delivery:
+        merged.append({
+            'order_id' :dl['order_id'],
+            'branch_name' :dl['branch_name'],
+            'cre_date' :dl['cre_date'],
+            'adress' :dl['adress'],
+            'comment' :dl['comment'],
+            'delivery_time' :dl['delivery_time'],
+            'phone' :dl['phone'],
+            'status_name' :dl['status_name'],
+        })   
+    merged3=[]
+    for o in merged2:
+        for d in merged:
+            if(o['order_id']==d['order_id']):
+                merged3.append({
+                    'order_id' :d['order_id'],
+                    'adress' :d['adress'],
+                    'comment' :d['comment'],
+                    'branch_name' :d['branch_name'],
+                    'delivery_time' :d['delivery_time'],
+                    'cre_date' :d['cre_date'],
+                    'sum_order' :o['sum_order'],
+                    'status_name' :d['status_name'],
                 })
-
-                merged.append({
-                    "delivery_time": dl['delivery_time'],
-                    "adress" : dl['adress'],
-                    'order_id' :ol['order_id'],})
-
-    cursor.execute("""select po.phone,  sum(po.paid) sum_product from piza_orders po where po.phone=""" + str(msisdn) +""" and po.status in (0,1);""")
-    colomns_sum = [i[0] for i in cursor.description]
-    sum_order = [dict(zip(colomns_sum, row)) for row in cursor]
-    summ_orders = {
-               "sum_order": sum_order[0]['sum_product']}
-    merged.append(summ_orders)
-    if order_list ==[]: 
+    if delivery ==[]: 
         content = {
                "err_msg": "You didn't have orders",
                "err_code": -1}
         return content
     else:
         content = {
-                "orders": merged,
-                #"summ_order": sum_order[0]['sum_product'],
-                #"orders": order_list,
-                "err_msg": "Ok",
+                "order_history": sorted(merged3, key=operator.itemgetter("order_id"), reverse=True),
+                "err_msg": "Order list",
                 "err_code": 0}
         return content
 
 
-def post_add_orders(msisdn, delivery_status, delivery_time, delivery_address, delivery_comment, product):
+def post_add_orders(msisdn, delivery_status, delivery_time, delivery_address, delivery_comment, branch_id, product):
     try:
         with connections['default'].cursor() as cursor:
+            print('msisdn ==> ', msisdn)
             cursor.execute("""select coalesce(max(order_id),0)+1 as id_orders from piza_orders;""")
             colomns_orders_id = [i[0] for i in cursor.description]
             orders_id = [dict(zip(colomns_orders_id, row)) for row in cursor]
@@ -139,10 +144,8 @@ def post_add_orders(msisdn, delivery_status, delivery_time, delivery_address, de
 and ac1.cre_dt = (Select max(ac2.cre_dt) from auth_code ac2 where ac2.stat_id=3 and ac2.msisdn=ac1.msisdn);""")
             colomns_orders_id = [i[0] for i in cursor.description]
             token_device = [dict(zip(colomns_orders_id, row)) for row in cursor]
-
             o_result = -1
             o_err_msg = ""
-            
             for i in range(len(product)):
                 args = (
                     msisdn, product[i]['product_id'], product[i]['count'], product[i]['paid'], product[i]['product_id'], orders_id[0]['id_orders'], o_result, o_err_msg)
@@ -155,7 +158,8 @@ and ac1.cre_dt = (Select max(ac2.cre_dt) from auth_code ac2 where ac2.stat_id=3 
                         "err_msg": result[0][2]}
 
             args = (
-                msisdn, delivery_status, delivery_time, delivery_address, delivery_comment, orders_id[0]['id_orders'], o_result, o_err_msg)
+                msisdn, delivery_status, delivery_time, delivery_address, delivery_comment, orders_id[0]['id_orders'], branch_id, o_result, o_err_msg)
+            print('args ', args)
             cursor.callproc('delivery_order', args)
             cursor.execute(
                 "select @_delivery_order_5,@_delivery_order_6,@_delivery_order_7")
@@ -178,7 +182,6 @@ and ac1.cre_dt = (Select max(ac2.cre_dt) from auth_code ac2 where ac2.stat_id=3 
                 }
 
                 response = requests.request("POST", url, headers=headers, data=payload)
-                print('PUSH ===> ',response.text)
             return resp
     except:
         return {
@@ -188,13 +191,215 @@ and ac1.cre_dt = (Select max(ac2.cre_dt) from auth_code ac2 where ac2.stat_id=3 
 
 def get_profil_list(msisdn):
    with connections['default'].cursor() as cursor:
-    cursor.execute("""select max(id), name, adress from piza_contact_info where phone=""" + str(msisdn) +""";""")
+    cursor.execute("""select pi.id, pi.name, pi.adress from piza_contact_info pi where pi.phone=""" + str(msisdn) +""" and pi.id=(
+select max(pi2.id) from piza_contact_info pi2 where pi2.phone=pi.phone);""")
     colomns_sum = [i[0] for i in cursor.description]
     contact_info = [dict(zip(colomns_sum, row)) for row in cursor]
 
     content = {
+            "phone": msisdn,
             "name": contact_info[0]['name'],
             "address": contact_info[0]['adress'],
             "err_msg": "Ok",
             "err_code": 0}
-    return content
+    return content   
+
+def post_order_detail(msisdn, order_id):
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute("""select po.order_id, po.phone, po.date, po.paid, po.count, pi.volume_name, pp.id as product_id, pp.name, pd.branch_id, CONCAT('media/', pp.image) as image
+from piza_orders po, piza_productitem pi, piza_products pp, piza_deliveryinfo pd
+where po.phone=""" + str(msisdn) +"""
+and po.product_value=pi.id
+and po.order_id=pd.order_id
+and po.order_id = """ + str(order_id) +"""
+and po.product_id=pp.id
+order by date;""")
+            colomns_orders_id = [i[0] for i in cursor.description]
+            order_detail = [dict(zip(colomns_orders_id, row)) for row in cursor]
+            if order_detail ==[]: 
+                content = {
+                    "err_msg": "Order_id "+ str(order_id) +" does not exist for this customer "+ str(msisdn),
+                    "err_code": -1}
+                return content
+          
+            content = {
+            "order_detail": order_detail,
+            "err_msg": "Ok",
+            "err_code": 0}
+            return content
+    except:
+        return {
+            "status": "error", 
+            "message":"db.add_orders.post_addorders -> " + str(sys.exc_info()[1])
+            }
+
+def post_order_detail_courier(msisdn, order_id):
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute("""select po.order_id, po.phone, po.date, po.paid, po.count, pi.volume_name, pp.id as product_id, pp.name, pd.courier, pd.branch_id, CONCAT('media/', pp.image) as image
+from piza_orders po, piza_productitem pi, piza_products pp, piza_deliveryinfo pd
+where po.product_value=pi.id
+and po.order_id=pd.order_id
+and po.order_id = """ + str(order_id) +"""
+and po.product_id=pp.id
+order by date;""")
+            colomns_orders_id = [i[0] for i in cursor.description]
+            order_detail = [dict(zip(colomns_orders_id, row)) for row in cursor]
+            if order_detail ==[]: 
+                content = {
+                    "err_msg": "Order_id "+ str(order_id) +" does not exist for this customer "+ str(msisdn),
+                    "err_code": -1}
+                return content
+          
+            content = {
+            "order_detail": order_detail,
+            "err_msg": "Ok",
+            "err_code": 0}
+            return content
+    except:
+        return {
+            "status": "error", 
+            "message":"db.add_orders.post_addorders -> " + str(sys.exc_info()[1])
+            }
+
+def post_add_contract(msisdn, name, adress):
+    try:
+        with connections['default'].cursor() as cursor:
+            o_result = -1
+            o_err_msg = ""
+            args = (
+                msisdn, name, adress, o_result, o_err_msg)
+            cursor.callproc('add_contact', args)
+            cursor.execute(
+                "select @_add_contact_3,@_add_contact_4;")
+            result = cursor.fetchall()
+
+            resp = {"phone":msisdn,
+                "name":name,
+                "adress":adress,
+                "err_code": result[0][0],
+                "err_msg": result[0][1]}
+            return resp
+    except:
+        return {
+            "status": "error", 
+            "message":"db.add_contract.post_add_contract -> " + str(sys.exc_info()[1])
+            }
+
+def post_pick_up(msisdn, order_id):
+    try:
+        with connections['default'].cursor() as cursor:
+            o_result = -1
+            o_err_msg = ""
+            args = (
+                msisdn, order_id, o_result, o_err_msg)
+            cursor.callproc('pick_up', args)
+            cursor.execute(
+                "select @_pick_up_2,@_pick_up_3;")
+            result = cursor.fetchall()
+
+            resp = {"err_code": result[0][0],
+                "err_msg": result[0][1]}
+            return resp
+    except:
+        return {
+            "status": "error", 
+            "message":"db.add_contract.post_add_contract -> " + str(sys.exc_info()[1])
+            }
+
+def post_status_change(msisdn, order_id, status_id):
+    try:
+        with connections['default'].cursor() as cursor:
+            o_result = -1
+            o_err_msg = ""
+            args = (
+                msisdn, order_id, status_id, o_result, o_err_msg)
+            cursor.callproc('change_status', args)
+            cursor.execute(
+                "select @_change_status_3,@_change_status_4;")
+            result = cursor.fetchall()
+            resp = {"err_code": result[0][0],
+                "err_msg": result[0][1]}
+            return resp
+    except:
+        return {
+            "status": "error", 
+            "message":"db.add_contract.post_add_contract -> " + str(sys.exc_info()[1])
+            }
+
+
+def get_orders_list_courier(msisdn):
+   with connections['default'].cursor() as cursor:
+    i_msisdn = msisdn
+    cursor.execute("""
+select po.order_id, sum(po.paid) sum_order
+from piza_orders po, piza_productitem pi, piza_products pp, piza_deliveryinfo pdi
+where po.order_id=pdi.order_id
+and po.product_value=pi.id
+and pdi.status=1
+and pdi.cre_date>=(NOW() - INTERVAL 7 day)
+and po.product_id=pp.id
+group by order_id
+order by  order_id;""")
+    colomns = [i[0] for i in cursor.description]
+    order_list = [dict(zip(colomns, row)) for row in cursor]
+    order_list = sorted(order_list,
+                    key = itemgetter('order_id'))                        
+
+    cursor.execute("""select di.phone, di.delivery_time, di.cre_date, di.adress, os.status_name, di.comment, di.order_id, pb.name branch_name, di.courier
+from piza_deliveryinfo di,  piza_order_status os, piza_branch pb
+where di.order_id is not null and di.status=os.id
+and di.cre_date>=(NOW() - INTERVAL 7 day)
+and di.status=1
+ and di.branch_id=pb.id order by cre_date desc;""")
+    colomns_delivery = [i[0] for i in cursor.description]
+    delivery = [dict(zip(colomns_delivery, row)) for row in cursor]
+
+    merged2=[]
+    for ol in order_list:
+        merged2.append({
+            'order_id' :ol['order_id'],
+            'sum_order' :ol['sum_order'],
+        })
+
+    merged=[]
+    for dl in delivery:
+        merged.append({
+            'order_id' :dl['order_id'],
+            'branch_name' :dl['branch_name'],
+            'cre_date' :dl['cre_date'],
+            'adress' :dl['adress'],
+            'comment' :dl['comment'],
+            'delivery_time' :dl['delivery_time'],
+            'phone' :dl['phone'],
+            'courier' :dl['courier'],
+            'status_name' :dl['status_name'],
+        })   
+    merged3=[]
+    for o in merged2:
+        for d in merged:
+            if(o['order_id']==d['order_id']):
+                merged3.append({
+                    'order_id' :d['order_id'],
+                    'adress' :d['adress'],
+                    'phone' :d['phone'],
+                    'courier' :d['courier'],
+                    'comment' :d['comment'],
+                    'branch_name' :d['branch_name'],
+                    'delivery_time' :d['delivery_time'],
+                    'cre_date' :d['cre_date'],
+                    'sum_order' :o['sum_order'],
+                    'status_name' :d['status_name'],
+                })
+    if delivery ==[]: 
+        content = {
+               "err_msg": "You didn't have orders",
+               "err_code": -1}
+        return content
+    else:
+        content = {
+                "order_list": sorted(merged3, key=operator.itemgetter("order_id"), reverse=True),
+                "err_msg": "Order list",
+                "err_code": 0}
+        return content

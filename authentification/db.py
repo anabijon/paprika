@@ -72,7 +72,7 @@ def post_sent_code(phone, device_token):
                 }
         with connections['default'].cursor() as mycursor:
             
-            subs_id=1234
+            subs_id=1
             lang_id=3
             name='Тестов Тест'
             request_id=1222
@@ -156,7 +156,18 @@ def post_check_sent_code(request, txn_id, sms_code):
             mycursor.callproc('verify_sms_code', args)
             mycursor.execute("select @_verify_sms_code_6,@_verify_sms_code_7,@_verify_sms_code_8,@_verify_sms_code_9,@_verify_sms_code_10,@_verify_sms_code_11,@_verify_sms_code_12,@_verify_sms_code_13,@_verify_sms_code_14")
             result=mycursor.fetchall()
-            resp={"subs_id":result[0][1],"msisdn":result[0][2],"lang_id":result[0][3],"name":result[0][4],"exit_location_id":result[0][5],"response_id":result[0][6],"result":result[0][7],"err_msg":result[0][8]}
+
+
+            mycursor.execute("""Select count(*) cnt_delivery from piza_contact_info pci where pci.phone=""" + str(result[0][2]) +""" and pci.block=99; """)
+            colomns_orders_id = [i[0] for i in mycursor.description]
+            delivery_cnt = [dict(zip(colomns_orders_id, row)) for row in mycursor]
+
+            if delivery_cnt[0]['cnt_delivery']>=1:
+                delivery = 2
+            else:
+                delivery =1
+
+            resp={"role":delivery,"msisdn":result[0][2],"lang_id":result[0][3],"name":result[0][4],"exit_location_id":result[0][5],"response_id":result[0][6],"result":result[0][7],"err_msg":result[0][8]}
             lang_id=result[0][3]
             lang_ref={1:'ru',2:'en',3:'tg'}
             user_language=lang_ref.get(lang_id,'ru')
